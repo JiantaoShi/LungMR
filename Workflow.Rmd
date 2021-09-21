@@ -1,0 +1,162 @@
+---
+title: "A Robust and Specific Workflow to Identify Master Regulators"
+output:
+  html_document:
+    toc: true
+---
+***
+
+```{r eval = TRUE, echo = FALSE, message = FALSE, warning = FALSE, comment = "", }
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, comment = "", fig.dpi = 300, fig.align = 'center')
+library("dplyr")
+library("reshape2")
+library("ggplot2")
+library("fgsea")
+```
+
+## Protein activity
+
+### ZWINT target genes
+```{r}
+source("code/MR.R")
+load("Data/LungMR_GRN.RData")
+
+ExS = GEX[["TCGA"]]
+dM = ExS - apply(ExS, 1, mean)
+
+regulon = GRN[["TCGA"]]
+tfmode = regulon$ZWINT$tfmode
+gs = list(up = sort(names(tfmode)[tfmode > 0]), dn = sort(names(tfmode)[tfmode < 0]))
+gs
+```
+
+<br/>
+
+### ZWINT activity
+```{r fig.width = 4, fig.height = 2}
+
+sampleName = c("TCGA-50-5072", "TCGA-44-6148")
+
+for(i in 1:2){
+  signature = dM[, sampleName[i]]
+  p = plotEnrichment(gs[["up"]], signature) + theme_bw() + labs(title= sampleName[i]) + 
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+  print(p)
+}
+```
+
+## Robustness
+
+### Signatures
+```{r}
+T1 = read.table(file = "Signature/Xie.txt", row.names = 1, header = TRUE)
+xie = list(HihgRisk = filter(T1, HR_FFPE > 1)$Symbol, LowRisk = filter(T1, HR_FFPE < 1)$Symbol)
+
+ES = as.character(read.table(file = "Signature/ES_exp_1.txt", 
+  row.names = NULL, header = TRUE, sep = "\t")[,1])
+PRC2 = as.character(read.table(file = "Signature/PRC2_targets.txt", 
+  row.names = NULL, header = TRUE, sep = "\t")[,1])
+gs = list(ES = ES, PRC2 = PRC2)
+
+cat("Number of genes shared between ESC and Xie:", length(intersect(xie, ES)), "\n")
+```
+
+<br/>
+
+### Master regulator identification
+```{r eval = FALSE}
+
+m1 = mrMulti(GEX, GRN, xie, nsample = 50)
+write.table(m1, file = "out/LungMR_Xie.txt", row.names = FALSE, col.names = TRUE, sep = "\t")
+
+m2 = mrMulti(GEX, GRN, gs, nsample = 50)
+write.table(m2, file = "out/LungMR_ESC.txt", row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+<br/>
+
+### Comparison
+```{r eval = TRUE, fig.width = 5, fig.height = 4}
+m1 = read.table(file = "out/LungMR_Xie.txt", row.names = NULL, header = TRUE, sep = "\t")
+m1$signature = "Xie"
+m2 = read.table(file = "out/LungMR_ESC.txt", row.names = NULL, header = TRUE, sep = "\t")
+m2$signature = "ESC"
+mergedT = rbind(m1, m2)
+
+uTable = filter(mergedT, p.value < 0.01, NES > 0)
+dTable = filter(mergedT, p.value < 0.01, NES < 0)
+
+x = table(uTable$Regulon, uTable$signature)
+y = as.data.frame.matrix(x)
+z = melt(updateTable(table(y[,1], y[,2]), space = 0:7, N00 = TRUE)) %>% filter(Var1 + Var2 > 0)
+
+p = ggplot(z, aes(Var1, Var2)) + theme_bw() +
+    labs(x = "# of data sets\n(ESC)", 
+    y = "# of data sets\n(Signature Xie)", title = "") +
+    geom_tile(aes(fill = value)) + 
+    geom_text(aes(label = round(value, 1))) +
+    scale_fill_gradient(low = "white", high = "red")
+print(p)
+filter(y, ESC == 7)    
+```
+```{r eval = FALSE, echo = FALSE}
+pdf(file = "PDF/Histgram2D_Xie_ESC.pdf", width = 5, height = 4)
+  print(p)
+dev.off()
+```
+
+<br/>
+
+## Specificity
+
+### Random signatures
+```{r eval = TRUE, fig.width = 5, fig.height = 4}
+PG = unique(unlist(lapply(GEX, rownames)))
+set.seed(1981)
+xie_random  = list(HihgRisk = sample(PG, length(xie$HihgRisk)), LowRisk = sample(PG, length(xie$LowRisk)))
+
+set.seed(1981)
+ES_random   = list(ES = sample(PG, length(gs$ES)), PRC2 = sample(PG, length(gs$PRC2)))
+```
+<br/>
+
+### Random Master regulators
+```{r eval = FALSE, fig.width = 5, fig.height = 4}
+m1_random = mrMulti(GEX, GRN, xie_random, nsample = 50)
+write.table(m1_random, file = "out/LungMR_Xie_random.txt", row.names = FALSE, col.names = TRUE, sep = "\t")
+
+m2_random = mrMulti(GEX, GRN, ES_random,  nsample = 50)
+write.table(m2_random, file = "out/LungMR_ESC_random.txt", row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+<br/>
+
+### Comparison of random signatures
+```{r eval = TRUE, fig.width = 5, fig.height = 4}
+m1_random = read.table(file = "out/LungMR_Xie_random.txt", row.names = NULL, header = TRUE, sep = "\t")
+m1_random$signature = "Xie_random"
+m2_random = read.table(file = "out/LungMR_ESC_random.txt", row.names = NULL, header = TRUE, sep = "\t")
+m2_random$signature = "ESC_random"
+mergedT = rbind(m1_random, m2_random)
+
+uTable = filter(mergedT, p.value < 0.01, NES > 0)
+dTable = filter(mergedT, p.value < 0.01, NES < 0)
+
+x = table(uTable$Regulon, uTable$signature)
+y = as.data.frame.matrix(x)
+z = melt(updateTable(table(y[,1], y[,2]), space = 0:7, N00 = TRUE)) %>% filter(Var1 + Var2 > 0)
+
+p = ggplot(z, aes(Var1, Var2)) + theme_bw() +
+  labs(x = "# of data sets\n(Random signature 1)", 
+    y = "# of data sets\n(Random signature 2)", title = "") +
+    geom_tile(aes(fill = value)) + 
+    geom_text(aes(label = round(value, 1))) +
+    scale_fill_gradient(low = "white", high = "red")
+print(p)
+```
+
+```{r eval = FALSE, echo = FALSE}
+pdf(file = "PDF/Histgram2D_Xie_ESC_Random.pdf", width = 5, height = 4)
+  print(p)
+dev.off()
+```

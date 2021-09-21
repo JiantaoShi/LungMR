@@ -1,0 +1,178 @@
+---
+title: "Master Regulators Driving response in ICB-based immunotherapy"
+output:
+  html_document:
+    toc: true
+---
+***
+
+```{r eval = TRUE, echo = FALSE, message = FALSE, warning = FALSE, comment = "", }
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, comment = "", fig.dpi = 300, fig.align = 'center')
+library("dplyr")
+library("reshape2")
+library("ggplot2")
+library("RColorBrewer")
+library("VennDiagram")
+```
+
+## Signatures
+```{r}
+source("code/MR.R")
+load("Data/LungMR_GRN.RData")
+
+Tx = read.table(file = "Signature/Gene_signature-CTL.txt", row.names = NULL, header = FALSE)
+CTL = as.character(Tx[, 1])
+
+Tx = read.table(file = "Signature/Gene_signature-dysfunction.txt", row.names = 1, header = TRUE)
+dysfunction = list(pos = rownames(filter(Tx, Correlation == "Positive")), 
+  neg = rownames(filter(Tx, Correlation == "Negtive")) )
+```
+<br/>
+
+## Master regulators
+
+```{r eval = FALSE}
+
+T1 = mrMulti(GEX, GRN, gs = list(CTL = CTL), nsample = 50)
+write.table(T1, file = "out/LungGRN_CTL.txt", row.names = FALSE, col.names = TRUE, sep = "\t")
+
+T2 = mrMulti(GEX, GRN, gs = dysfunction, nsample = 50)
+write.table(T2, file = "out/LungGRN_dysfunction.txt", row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+```{r fig.width = 5, fig.height = 5}
+T1 = read.table(file = "out/LungGRN_CTL.txt", row.names = NULL, header = TRUE, sep = "\t")
+T1$signature = "CTL"
+T2 = read.table(file = "out/LungGRN_dysfunction.txt", row.names = NULL, header = TRUE, sep = "\t")
+T2$signature = "dysfunction"
+mergedT = rbind(T1, T2)
+
+uTable = filter(mergedT, p.value < 0.01, NES > 0)
+dTable = filter(mergedT, p.value < 0.01, NES < 0)
+```
+
+## Activated master regulators
+
+### Comparison
+
+```{r fig.width = 5, fig.height = 4}
+x = table(uTable$Regulon, uTable$signature)
+y = as.data.frame.matrix(x)
+z = melt(updateTable(table(y[,1], y[,2]), space = 0:7, N00 = TRUE)) %>% filter(Var1 + Var2 > 0)
+
+p = ggplot(z, aes(Var1, Var2)) + theme_bw() +
+    labs(x = "# of data sets\n(T-cell abundance)", 
+    y = "# of data sets\n(T-cell dysfunction)", title = "") +
+    geom_tile(aes(fill = value)) + 
+    geom_text(aes(label = round(value, 1))) +
+    scale_fill_gradient(low = "white", high = "red")
+print(p)
+
+write.table(y, file = "out/Immunotherapy_MR_Activated.txt", 
+  row.names = TRUE, col.names = TRUE, sep = "\t")
+filter(y, CTL >=6, dysfunction >=6)    
+```
+
+```{r eval = FALSE, echo = FALSE}
+pdf(file = "PDF/Histgram2D_Immunotherapy_Activated.pdf", width = 5, height = 5)
+  print(p)
+dev.off()
+```
+
+### Pathway enrichment
+```{r}
+source("/sibcb2/bioinformatics/Script/PathwayEnrichment.R")
+load("/sibcb2/bioinformatics/KnowledgeBase/MSigDB/MSigDB.RData")
+
+PG = as.character(read.table(file = "Data/VIPER_Regulators.txt", row.names = NULL, col.names=TRUE,sep = "\t")[,1])
+pwList = MSigDB$MSigDB_c5_bp_v5
+TopCTL = rownames(filter(as.data.frame.matrix(x), CTL >= 4))
+TopDysfunction = rownames(filter(as.data.frame.matrix(x), dysfunction >= 4))
+EnrichCTL = pHyperList(TopCTL, pwList, PG) %>% arrange(pvalue)
+EnrichDysfunction = pHyperList(TopDysfunction, pwList, PG) %>% arrange(pvalue)
+write.table(EnrichCTL, file = "out/Immunotherapy_CTL_pathway_Activated.txt", 
+  row.names = TRUE, col.names = TRUE, sep = "\t")
+EnrichCTL[1:10, 1:5]
+
+write.table(EnrichDysfunction, file = "out/Immunotherapy_Dysfunction_pathway_Activated.txt", 
+  row.names = TRUE, col.names = TRUE, sep = "\t")
+EnrichDysfunction[1:10,1:5]
+```
+
+```{r fig.width = 4, fig.height = 4}
+shownPathway = names(pwList)
+EnrichMAP = data.frame(pathway = shownPathway, 
+             CTL = EnrichCTL[shownPathway,"qvalue"],
+             dysfunction = EnrichDysfunction[shownPathway, "qvalue"])
+
+p = ggplot(EnrichMAP, aes(-log10(CTL), -log10(dysfunction))) + theme_bw() +
+    geom_point(color = "black", alpha = 0.5, shape = 1) + 
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + 
+    geom_vline(xintercept = -log10(0.05), linetype = "longdash", color = "black", size = 0.5) +
+    geom_hline(yintercept = -log10(0.05), linetype = "longdash", color = "black", size = 0.5)
+print(p)
+```
+
+```{r eval = FALSE, echo = FALSE}
+pdf(file = "PDF/Immunotherapy_pathway_Activated.pdf", width = 5, height = 5)
+  print(p)
+dev.off()
+```
+
+## Repressed master regulators
+
+### Comparison
+
+```{r fig.width = 5, fig.height = 4}
+x = table(dTable$Regulon, dTable$signature)
+y = as.data.frame.matrix(x)
+z = melt(updateTable(table(y[,1], y[,2]), space = 0:7, N00 = TRUE)) %>% filter(Var1 + Var2 > 0)
+
+p = ggplot(z, aes(Var1, Var2)) + theme_bw() +
+    labs(x = "# of data sets\n(T-cell abundance)", 
+    y = "# of data sets\n(T-cell dysfunction)", title = "") +
+    geom_tile(aes(fill = value)) + 
+    geom_text(aes(label = round(value, 1))) +
+    scale_fill_gradient(low = "white", high = "red")
+print(p)
+
+write.table(y, file = "out/Immunotherapy_MR_Repressed.txt", 
+  row.names = TRUE, col.names = TRUE, sep = "\t")
+filter(y, dysfunction >=6)    
+```
+
+```{r eval = FALSE, echo = FALSE}
+pdf(file = "PDF/Histgram2D_Immunotherapy_Repressed.pdf", width = 5, height = 5)
+  print(p)
+dev.off()
+```
+
+### Pathway enrichment
+
+```{r fig.width = 4, fig.height = 6}
+pwList = MSigDB$MSigDB_h_all_v5
+TopDysfunction = rownames(filter(as.data.frame.matrix(x), dysfunction >= 4))
+EnrichDysfunction = pHyperList(TopDysfunction, pwList, PG) %>% arrange(pvalue)
+
+write.table(EnrichDysfunction, file = "out/Immunotherapy_Dysfunction_pathway_Repressed.txt", 
+  row.names = TRUE, col.names = TRUE, sep = "\t")
+filter(EnrichDysfunction, qvalue < 0.05)
+
+gs = gsub("HALLMARK_", "", rownames(EnrichDysfunction))[1:6]
+gs = factor(gs, levels = gs)
+mTable = data.frame(gs = gs, LogFDR = -log10(EnrichDysfunction$qvalue)[1:6])
+
+p <- ggplot(mTable, aes(x = gs, y = LogFDR)) + 
+  geom_bar(stat="identity", fill = "black") + theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  ylab("-log10(FDR)") + xlab("") + theme(axis.text.x=element_text(angle = 60, hjust = 1, size = 9)) +
+  geom_hline(yintercept = -log10(0.05), color = "red", linetype = "longdash")
+print(p)
+```
+
+```{r eval = FALSE, echo = FALSE}
+pdf(file = "PDF/Immunotherapy_pathway_Repressed.pdf", width = 4, height = 6)
+  print(p)
+dev.off()
+```

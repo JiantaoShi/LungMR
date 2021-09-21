@@ -1,0 +1,16 @@
+---
+title: "Identification of master regulators driving disease progression, relapse and drug resistance in lung adenocarcinoma"
+output:
+  html_document:
+    toc: true
+---
+***
+
+## Abstract
+Lung cancer is the leading cause of cancer related death worldwide. Current treatment strategies primarily involve surgery, chemotherapy, radiotherapy, molecularly targeted therapy, and immunotherapy, determined by TNM stages, histologic types, and genetic profiles. Plenty of studies have been trying to identify robust prognostic gene expression signatures. Even for high performance signatures, they usually have no shared genes in common. This is not totally unexpected, since a prognostic signature is associated with patient survival and may contain no upstream regulators, which may reveal mechanism of disease progression and serve as novel therapeutic targets to improve patient survival. In this study, we have utilized a simple yet powerful workflow to identify potential master regulators that drive poor prognosis in patients with lung adenocarcinoma. This workflow takes gene expression signatures that are associated with poor survival of early-stage lung adenocarcinoma, EGFR tyrosine kinase inhibitors resistance and responses to immune checkpoint inhibitors, respectively, and identifies potential master regulators by a regulatory network-based approach. Our study uncovered possible mechanisms underlying recurrence, resistance to targeted therapy and immunotherapy and identified promising therapeutic targets in patients with lung adenocarcinoma. Master regulators that repress immunotherapy are enriched with MYC targets, E2F targets, oxidative phosphorylation and mTOR signaling.
+
+<p align="center">
+  <img width="800" src="images/LungMR.png">
+</p>
+
+A workflow to identify master regulators driving prognosis in patients with LUAD. For a gene expression data set such as TCGA-LUAD, the transcriptional regulatory network was constructed using ARACNe with default parameters (Mutual information p-value = 10−8, 100 bootstraps). ZWINT was reported as potential master regulator in LUAD, and its targets were shown as an example. Then the protein activity of each regulator can be assessed in each sample using VIPER. Intuitively, when target genes of a given regulator are upregulated, the regulator is activated. For example, ZWINT is activated in sample TCGA−50−5072 and repressed in TCGA−44−6148. For a given prognostic signature of interest, patient samples were stratified by the enrichment of this signature as quantified by Wilcoxon rank-sum test. Top 50 samples with highest enrichment scores were compared to those with lowest by VIPER to identify potential master regulators with p-value cutoff of 0.01.

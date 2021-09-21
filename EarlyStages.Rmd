@@ -1,0 +1,121 @@
+---
+title: "Master Regulators in Early Stage LUAD"
+output:
+  html_document:
+    toc: true
+---
+***
+
+```{r eval = TRUE, echo = FALSE, message = FALSE, warning = FALSE, comment = "", }
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, comment = "", fig.dpi = 300, fig.align = 'center')
+library("dplyr")
+library("reshape2")
+library("ggplot2")
+library("RColorBrewer")
+library("VennDiagram")
+```
+
+## Signatures
+
+```{r}
+Tx = read.table(file = "Signature/Chen2.txt", row.names = NULL, header = TRUE)
+Chen2 = setdiff(as.character(unique(Tx$Symbol)), "---")
+
+Tx = read.table(file = "Signature/Lu1.txt", row.names = NULL, header = TRUE)
+Lu1 = as.character(Tx$Gene)
+
+Tx = read.table(file = "Signature/Tomida1_a.txt", row.names = NULL, header = TRUE)
+Tomida1_a = as.character(Tx$Gene)
+```
+
+```{r fig.width = 4, fig.height = 4}
+  groupColor = c("#08519c", "#ce1256", "#54278f")
+  venn.plot <- draw.triple.venn(
+          area1 = length(Lu1),
+          area2 = length(Chen2),
+          area3 = length(Tomida1_a),
+          n12   = length(intersect(Lu1, Chen2)),
+          n13   = length(intersect(Lu1, Tomida1_a)),
+          n23   = length(intersect(Chen2, Tomida1_a)),
+          n123  = length(intersect(intersect(Lu1, Chen2), Tomida1_a)),
+          category = c("Lu1", "Chen2", "Tomida1_a"),
+          fill = c("white", "white", "white"),
+          lty  = "solid",
+          lwd  = 3,
+          cex  = 2,
+          cat.cex = 1,
+          col     = groupColor,
+          cat.col = groupColor,
+          euler   = TRUE)
+```
+
+## Master regulators
+
+```{r eval = FALSE}
+source("code/MR.R")
+load("Data/LungMR_GRN.RData")
+
+Tx = read.table(file = "Signature/Tomida1_a.txt", row.names = NULL, header = TRUE)
+gs = list(HihgRisk = filter(Tx, Group == "Fatal")[, "Gene"], LowRisk = filter(Tx, Group == "Favorable")[, "Gene"])
+T1 = mrMulti(GEX, GRN, gs, nsample = 50)
+write.table(T1, file = "out/LungGRN_Tomida1_a.txt", row.names = FALSE, col.names = TRUE, sep = "\t")
+
+Tx = read.table(file = "Signature/Lu1.txt", row.names = NULL, header = TRUE)
+gs = list(HihgRisk = filter(Tx, Risk == "HighRisk")[, "Gene"], LowRisk = filter(Tx, Risk == "LowRisk")[, "Gene"])
+T2 = mrMulti(GEX, GRN, gs, nsample = 50)
+write.table(T2, file = "out/LungGRN_Lu1.txt", row.names = FALSE, col.names = TRUE, sep = "\t")
+
+Tx = read.table(file = "Signature/Chen2.txt", row.names = NULL, header = TRUE)
+gs = list(HihgRisk = filter(Tx, Coef > 0)[, "Symbol"])
+T3 = mrMulti(GEX, GRN, gs, nsample = 50)
+write.table(T3, file = "out/LungGRN_Chen2.txt", row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+```{r fig.width = 5, fig.height = 4}
+T1 = read.table(file = "out/LungGRN_Chen2.txt", row.names = NULL, header = TRUE, sep = "\t")
+T1$signature = "Chen2"
+
+T2 = read.table(file = "out/LungGRN_Lu1.txt", row.names = NULL, header = TRUE, sep = "\t")
+T2$signature = "Lu1"
+
+T3 = read.table(file = "out/LungGRN_Tomida1_a.txt", row.names = NULL, header = TRUE, sep = "\t")
+T3$signature = "Tomida1_a"
+mTable = rbind(T1, T2, T3)
+
+uTable = filter(mTable, p.value < 0.01, NES > 0)
+x = table(uTable$Regulon, uTable$signature)
+idx = rowSums(x >= 6) > 0
+x = x[idx, ]
+mm = as.matrix(x >= 6) + 0
+
+venn.plot <- draw.triple.venn(
+        area1 = sum(mm[,1]),
+        area2 = sum(mm[,2]),
+        area3 = sum(mm[,3]),
+        n12   = sum(rowSums(mm[, c(1,2)]) == 2),
+        n13   = sum(rowSums(mm[, c(1,3)]) == 2),
+        n23   = sum(rowSums(mm[, c(2,3)]) == 2),
+        n123  = sum(rowSums(mm[, c(1,2,3)]) == 3),
+        category = colnames(mm),
+        fill = c("white", "white", "white"),
+        lty  = "solid",
+        lwd  = 3,
+        cex  = 2,
+        cat.cex = 1,
+        col     = groupColor,
+        cat.col = groupColor,
+        euler   = TRUE)
+```
+
+## Examples of Master Regulators
+```{r}
+uTable = filter(mTable, p.value < 0.01, NES > 0)
+ux = as.data.frame.matrix(table(uTable$Regulon, uTable$signature)) %>% filter(Chen2 + Lu1 + Tomida1_a > 0)
+write.table(ux, file = "out/EarlyStages_Summary_Activated.txt", row.names = TRUE, col.names = TRUE, sep = "\t")
+filter(ux, Chen2 >=6, Lu1 >= 6, Tomida1_a >= 6)
+
+dTable = filter(mTable, p.value < 0.01, NES < 0)
+dx = as.data.frame.matrix(table(dTable$Regulon, dTable$signature)) %>% filter(Chen2 + Lu1 + Tomida1_a > 0)
+write.table(dx, file = "out/EarlyStages_Summary_Repressed.txt", row.names = TRUE, col.names = TRUE, sep = "\t")
+filter(dx, Chen2 >=6, Lu1 >= 6, Tomida1_a >= 6)
+```

@@ -1,0 +1,157 @@
+---
+title: "Master Regulators Driving EGFR TKI Resistance"
+output:
+  html_document:
+    toc: true
+---
+***
+
+```{r eval = TRUE, echo = FALSE, message = FALSE, warning = FALSE, comment = "", }
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, comment = "", fig.dpi = 300, fig.align = 'center')
+library("dplyr")
+library("reshape2")
+library("ggplot2")
+library("RColorBrewer")
+library("VennDiagram")
+```
+
+## Signatures
+
+```{r fig.width = 8, fig.height = 4}
+source("code/MR.R")
+load("Data/LungMR_GRN.RData")
+
+load("Data/GSE123066_DGE.RData")
+load("Data/GSE121634_DGE.RData")
+set1 = rownames(GSE123066_DGE$uTable)
+set2 = rownames(GSE121634_DGE$uTable)
+
+groupColor = c("#08519c", "#ce1256")
+venn.plot <- draw.pairwise.venn(
+        area1 = length(set1),
+        area2 = length(set2),
+        cross.area   = length(intersect(set1, set2)),
+        category = c("GSE123066", "GSE121634"),
+        fill = c("white", "white"),
+        lty  = "solid",
+        lwd  = 3,
+        cex  = 2,
+        cat.cex = 1,
+        col     = groupColor,
+        cat.col = groupColor,
+        euler   = TRUE)
+```
+
+```{r fig.width = 5, fig.height = 3}
+load("/sibcb2/bioinformatics/KnowledgeBase/MSigDB/MSigDB.RData")
+signature = intersect(set1, set2)
+EMT = MSigDB$MSigDB_h_all_v5$HALLMARK_EPITHELIAL_MESENCHYMAL_TRANSITION
+
+venn.plot <- draw.pairwise.venn(
+        area1 = length(signature),
+        area2 = length(EMT),
+        cross.area   = length(intersect(signature, EMT)),
+        category = c("signature", "EMT"),
+        fill = c("white", "white"),
+        lty  = "solid",
+        lwd  = 3,
+        cex  = 2,
+        cat.cex = 1,
+        col     = groupColor,
+        cat.col = groupColor,
+        euler   = TRUE)
+```
+
+## Master regulators
+
+```{r eval = FALSE}
+
+T1 = mrMulti(GEX, GRN, gs = list(EMT = EMT), nsample = 50)
+write.table(T1, file = "out/LungGRN_EMT.txt", row.names = FALSE, col.names = TRUE, sep = "\t")
+
+T2 = mrMulti(GEX, GRN, gs = list(TKI = signature), nsample = 50)
+write.table(T2, file = "out/LungGRN_TKI.txt", row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+```{r fig.width = 5, fig.height = 5}
+T1 = read.table(file = "out/LungGRN_EMT.txt", row.names = NULL, header = TRUE, sep = "\t")
+T1$signature = "EMT"
+T2 = read.table(file = "out/LungGRN_TKI.txt", row.names = NULL, header = TRUE, sep = "\t")
+T2$signature = "signature"
+mergedT = rbind(T1, T2)
+
+uTable = filter(mergedT, p.value < 0.01, NES > 0)
+dTable = filter(mergedT, p.value < 0.01, NES < 0)
+
+x = table(uTable$Regulon, uTable$signature)
+y = as.data.frame.matrix(x) %>% filter(EMT + signature > 0)
+z = melt(updateTable(table(y[,1], y[,2]), space = 0:7, N00 = TRUE)) %>% filter(Var1 + Var2 > 0)
+
+p = ggplot(z, aes(Var1, Var2)) + theme_bw() +
+  labs(x = "# of data sets\n(EMT pathway)", y = "# of data sets\n(EGFR TKI signatue)", title = "") +
+    geom_tile(aes(fill = value)) + 
+    geom_text(aes(label = round(value, 1))) +
+    scale_fill_gradient(low = "white", high = "red")
+print(p)
+filter(y, EMT >=6, signature >=6)
+write.table(y, file = "out/TKI_MR_Activated.txt", row.names = TRUE, col.names = TRUE, sep = "\t")
+```
+
+```{r eval = FALSE, echo = FALSE}
+pdf(file = "PDF/Histgram2D_TKI_Activated.pdf", width = 5, height = 4)
+  print(p)
+dev.off()
+```
+
+## Pathway enrichment
+
+```{r fig.width = 6, fig.height = 6}
+source("/sibcb2/bioinformatics/Script/PathwayEnrichment.R")
+PG = as.character(read.table(file = "Data/VIPER_Regulators.txt", row.names = NULL, col.names=TRUE,sep = "\t")[,1])
+pwList = MSigDB$MSigDB_h_all_v5
+res = as.data.frame.matrix(x)
+
+TopSignature = rownames(filter(res, signature >= 3))
+TopEMT = rownames(filter(res, EMT >= 3))
+EnrichSignature = pHyperList(TopSignature, pwList, PG) %>% arrange(pvalue)
+EnrichEMT = pHyperList(TopEMT, pwList, PG) %>% arrange(pvalue)
+filter(EnrichSignature, qvalue < 0.05)[,1:5]
+write.table(EnrichSignature, file = "out/TKI_signature_pathway_Activated.txt", 
+  row.names = TRUE, col.names = TRUE, sep = "\t")
+
+filter(EnrichEMT, qvalue < 0.05)[,1:5]
+write.table(EnrichEMT, file = "out/TKI_EMT_pathway_Activated.txt", 
+  row.names = TRUE, col.names = TRUE, sep = "\t")
+
+shownPathway = c("HALLMARK_EPITHELIAL_MESENCHYMAL_TRANSITION",
+                "HALLMARK_COMPLEMENT",
+                "HALLMARK_TNFA_SIGNALING_VIA_NFKB",
+                "HALLMARK_HYPOXIA",
+                "HALLMARK_INFLAMMATORY_RESPONSE",
+                "HALLMARK_ANGIOGENESIS",
+                "HALLMARK_TGF_BETA_SIGNALING",
+                "HALLMARK_WNT_BETA_CATENIN_SIGNALING",
+                "HALLMARK_APOPTOSIS",
+                "HALLMARK_NOTCH_SIGNALING")
+
+EnrichMAP = data.frame(pathway = gsub("HALLMARK_", "", c(shownPathway, shownPathway)), 
+             qvalue = c(EnrichSignature[shownPathway,"qvalue"], EnrichEMT[shownPathway, "qvalue"]),
+             group = c(rep("signature", length(shownPathway)), rep("EMT", length(shownPathway))))
+
+EnrichMAP$pathway = factor(EnrichMAP$pathway, levels = gsub("HALLMARK_", "", shownPathway))
+
+p <- ggplot(EnrichMAP, aes(x = pathway, y = -log10(qvalue), fill = group)) +
+  geom_bar(stat="identity", position = "dodge") + theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  ylab("-log10(FDR)") + xlab("") + theme(axis.text.x=element_text(angle = 60, hjust = 1, size = 8)) +
+  geom_hline(yintercept = -log10(0.05), linetype="longdash", color = "black", size=0.5) +
+  scale_fill_manual(values = c("signature" = "red", "EMT" = "dodgerblue4"))
+print(p)
+```
+
+```{r eval = FALSE, echo = FALSE}
+pdf(file = "PDF/TKI_Pathway_Activated.pdf", width = 5, height = 5)
+  print(p)
+dev.off()
+```

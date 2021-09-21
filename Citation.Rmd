@@ -1,0 +1,13 @@
+---
+title: "Citation"
+output:
+  html_document:
+    toc: true
+---
+***
+
+## Citation
+Qiong Xu, Qiongfang Cha, Qin Hui, Liu Bin, Handong Jiang, Xueling Wu* and **Jiantao Shi\*** Identification of master regulators driving disease progression, relapse and drug resistance in lung adenocarcinoma. 
+
+## Funding
+This study is supported by the Shanghai Pujiang Program [20PJ1414700 to J.S.].
