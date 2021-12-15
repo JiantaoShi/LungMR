@@ -1,0 +1,58 @@
+---
+title: "Loading gene expression and regulon data"
+output:
+  html_document:
+    toc: true
+---
+***
+
+```{r eval = TRUE, echo = FALSE, message = FALSE, warning = FALSE, comment = "", }
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, comment = "", fig.dpi = 300, fig.align = 'center')
+library("dplyr")
+library("viper")
+```
+
+## Saving data
+
+```{r eval = FALSE}
+load("Data/LungMR_GRN.RData")
+
+for(i in 1:7){
+  
+  tag <- names(GEX)[i]
+  ExS <- GEX[[i]]
+  fileOut = paste0("Data/GEX/", tag, ".RDS")
+  saveRDS(ExS, file = fileOut) 
+}
+
+for(i in 1:7){
+  
+  tag <- names(GRN)[i]
+  ExS <- GRN[[i]]
+  fileOut = paste0("Data/GRN/", tag, ".RDS")
+  saveRDS(ExS, file = fileOut) 
+}
+```
+
+## Loading data
+
+```{r eval = FALSE}
+
+GEX =  GRN = list()
+ID <- strsplit(list.files("Data/GEX"), "\\.RDS")
+
+for(i in 1:length(ID)){
+  
+  fileIn <- paste0("Data/GEX/", ID[i], ".RDS")
+  GEX[[i]] <- readRDS(fileIn)
+}
+names(GEX) <- ID
+
+for(i in 1:length(ID)){
+  
+  fileIn <- paste0("Data/GRN/", ID[i], ".RDS")
+  GRN[[i]] <- readRDS(fileIn)
+}
+names(GRN) <- ID
+
+```
