@@ -1,19 +1,35 @@
 suppressWarnings(suppressMessages(library(dplyr)))
 suppressWarnings(suppressMessages(library(viper)))
 
+gsFilter = function(ExS, gs){
+
+	gene = rownames(ExS)
+	res = list()
+	for(i in 1:length(gs)){
+		res[[i]] = intersect(gs[[i]], gene)
+	}
+	idx = sapply(res, length) > 0
+	res = res[idx]
+	return(res)
+}
+
 mrDiscovery = function(ExS, regulon, gs, nsample = 50){
 
 	ref = apply(ExS, 1, mean)
 	dM  = ExS - ref
 	score  = rep(NA, ncol(dM))
-	
+
+	gs = gsFilter(ExS, gs)
+	if(length(gs) == 0)
+		return(NULL)
+
 	# sample stratification
 	sizeCheck = any(sapply(gs, length) < 10)
 	if(sizeCheck){
 		if(length(gs) == 1)
-			score = apply(dM[rownames(dM) %in% gs[[1]], ], 2, mean)
+			score = apply(dM[rownames(dM) %in% gs[[1]], ,drop = FALSE], 2, mean)
 		else if(length(gs) == 2)
-			score = apply(dM[rownames(dM) %in% gs[[1]], ], 2, mean) - apply(dM[rownames(dM) %in% gs[[2]], ], 2, mean)
+			score = apply(dM[rownames(dM) %in% gs[[1]], ,drop = FALSE], 2, mean) - apply(dM[rownames(dM) %in% gs[[2]], ,drop = FALSE], 2, mean)
 	} else {
 		for(i in 1:ncol(dM)){
 			temp = SimpleRankTest(dM[,i], gs)
@@ -40,14 +56,21 @@ mrDiscovery = function(ExS, regulon, gs, nsample = 50){
 mrMulti = function(EXList, GRList, gs, nsample = 50){
 	if(length(EXList) != length(GRList))
 		stop("Size not matched.\n")
+	temp = list()
 	for(i in 1:length(EXList)){
-		cat("Running data set", names(EXList)[i], "\n")
+		tag = names(EXList)[i]
+		cat("Running data set", tag, "\n")
 		res = mrDiscovery(EXList[[i]], GRList[[i]], gs, nsample = nsample)
-		res$dataset = names(EXList)[i]
+		if(is.null(res))
+			next
+		res$dataset = tag
+		temp[[tag]] = res
+	}
+	for(i in 1:length(temp)){
 		if(i == 1)
-			mergedT = res
+			mergedT = temp[[i]]
 		else
-			mergedT = rbind(mergedT, res)
+			mergedT = rbind(mergedT, temp[[i]], make.row.names = FALSE)
 	}
 	return(mergedT)
 }
