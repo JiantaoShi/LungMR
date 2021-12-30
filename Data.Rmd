@@ -1,0 +1,10 @@
+---
+title: "Code and Data"
+output:
+  html_document:
+    toc: true
+---
+***
+
+## Availability
+The datasets and source code to reproduce the results in this study is available from [GitHub](https://github.com/JiantaoShi/LungMR).
